@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Planner</title>
+<style>
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: #f0f2f5;
+}
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #333;
+}
+
+.planner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Day Container */
+.day-container {
+    background: #ffffff;
+    padding: 15px;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+.day-container h2 {
+    margin: 0 0 15px 0;
+    padding: 12px;
+    border-radius: 12px;
+    text-align: center;
+    color: white;
+    user-select: none;
+    cursor: pointer;
+}
+.day-container.weekday h2 { background: #75ba73; }
+.day-container.weekend h2 { background: #81c9bb; }
+
+/* Tasks Wrapper */
+.tasks-wrapper {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    scroll-behavior: smooth;
+}
+.tasks-wrapper::-webkit-scrollbar {
+    height: 6px;
+}
+.tasks-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.2);
+    border-radius: 3px;
+}
+
+/* Task Card & Input Card */
+.task-card, .add-task-card {
+    width: 250px;
+    height: 250px;
+    background: #d7e3fc;
+    padding: 10px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    justify-content: flex-start;
+    box-sizing: border-box;
+}
+.add-task-card {
+    background: #e3f2fd;
+}
+.task-card.completed {
+    background-color: #e0f4e0;
+}
+.task-card .task-title {
+    width: 100%;
+    padding: 5px 1px 4px 0px;
+    border-radius: 4px;
+    background-color: #929292;
+    color: #fff;
+    font-weight: bold;
+    text-align: center;
+}
+.task-card.completed .task-title {
+    background-color: #6aa84f;
+}
+
+/* Buttons */
+.task-card button, .add-task-card button {
+    padding: 5px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+}
+.complete-btn { background: #6aa84f; color: white; }
+.complete-btn:hover { background: #4d7c36; }
+.delete-btn { background: #e06666; color: white; }
+.delete-btn:hover { background: #c0392b; }
+
+/* Input fields inside Add Task Card */
+.add-task-card input, .add-task-card select {
+    padding: 6px 8px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.add-task-card button {
+    margin-top: auto;
+    background: #6fa8dc;
+    color: white;
+}
+.add-task-card button:hover { background: #4a90e2; }
+
+</style>
+</head>
+<body>
+
+<h1>Weekly Planner</h1>
+<div class="planner" id="planner"></div>
+
+<script>
+const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+let dayTypes = JSON.parse(localStorage.getItem('dayTypes'))||{};
+let tasks = JSON.parse(localStorage.getItem('tasks'))||{};
+
+days.forEach(day=>{
+    if(!dayTypes[day]) dayTypes[day] = day==="Saturday"||day==="Sunday"?"Weekend":"Weekday";
+    if(!tasks[day]) tasks[day] = [];
+});
+
+function renderPlanner(){
+    const planner = document.getElementById('planner');
+    planner.innerHTML = "";
+
+    days.forEach(day=>{
+        const dayContainer = document.createElement('div');
+        dayContainer.className = "day-container " + (dayTypes[day]==="Weekend"?"weekend":"weekday");
+
+        const dayTitle = document.createElement('h2');
+        dayTitle.textContent = day;
+        dayTitle.onclick = ()=> {
+            dayTypes[day] = dayTypes[day]==="Weekday"?"Weekend":"Weekday";
+            localStorage.setItem('dayTypes', JSON.stringify(dayTypes));
+            renderPlanner();
+        }
+
+        // Tasks Wrapper
+        const tasksWrapper = document.createElement('div');
+        tasksWrapper.className = "tasks-wrapper";
+
+        // Add Task Card (first card)
+        const addCard = document.createElement('div');
+        addCard.className = "add-task-card";
+        addCard.innerHTML = `
+            <input type="text" placeholder="Title" id="title-${day}">
+            <select id="shift-${day}">
+                <option value="">Select Shift</option>
+                <option value="Morning">Morning</option>
+                <option value="Afternoon">Afternoon</option>
+                <option value="Evening">Evening</option>
+                <option value="Night">Night</option>
+            </select>
+            <input type="text" placeholder="Description" id="desc-${day}">
+            <button onclick="addTask('${day}')">Add Task</button>
+        `;
+        tasksWrapper.appendChild(addCard);
+
+        // Render tasks
+        tasks[day].forEach((task,index)=>{
+            const taskCard = document.createElement('div');
+            taskCard.className = "task-card" + (task.completed?" completed":"");
+            taskCard.innerHTML = `
+                <div class="task-title">${task.title}</div>
+                <div>${task.shift}</div>
+                <div>${task.description}</div>
+                <div style="margin-top:auto;">
+                    ${!task.completed?`<button class="complete-btn" onclick="completeTask('${day}',${index})">Complete</button>`:""}
+                    <button class="delete-btn" onclick="deleteTask('${day}',${index})">Delete</button>
+                </div>
+            `;
+            tasksWrapper.appendChild(taskCard);
+        });
+
+        dayContainer.appendChild(dayTitle);
+        dayContainer.appendChild(tasksWrapper);
+        planner.appendChild(dayContainer);
+    });
+}
+
+function addTask(day){
+    const title = document.getElementById(`title-${day}`).value.trim();
+    const shift = document.getElementById(`shift-${day}`).value;
+    const desc = document.getElementById(`desc-${day}`).value.trim();
+    if(!title||!shift){ alert("Fill all required fields"); return; }
+    tasks[day].push({title, shift, description: desc, completed:false});
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+    renderPlanner();
+}
+
+function completeTask(day,index){
+    tasks[day][index].completed = true;
+    localStorage.setItem('tasks',JSON.stringify(tasks));
+    renderPlanner();
+}
+
+function deleteTask(day,index){
+    tasks[day].splice(index,1);
+    localStorage.setItem('tasks',JSON.stringify(tasks));
+    renderPlanner();
+}
+
+renderPlanner();
+</script>
+</body>
+</html>
