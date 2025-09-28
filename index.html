@@ -6,111 +6,140 @@
   <title>Study Tracker - Dashboard</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* Keep your original clean look */
+    body { font-family: Arial, sans-serif; background:#f8fafc; margin:0; padding:20px; }
+    h1 { text-align:center; margin-bottom:20px; }
+    p { text-align:center; }
+
+    /* Grid for cards */
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap:20px; }
+
+    .card {
+      background:white; border-radius:15px; padding:15px;
+      box-shadow:0 4px 8px rgba(0,0,0,0.1); cursor:pointer;
+      transition:transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover { transform:translateY(-5px); box-shadow:0 6px 14px rgba(0,0,0,0.2); }
+
+    /* Modal fullscreen zoom */
+    .modal {
+      position:fixed; inset:0; background:rgba(0,0,0,0.8);
+      display:flex; justify-content:center; align-items:center;
+      visibility:hidden; opacity:0; transition:opacity 0.3s ease; z-index:999;
+    }
+    .modal.active { visibility:visible; opacity:1; }
+    .modal-content {
+      background:white; border-radius:15px; padding:20px;
+      width:95%; height:85%; position:relative; display:flex; flex-direction:column; padding-bottom: 7%;
+    }
+    .modal-content canvas { flex:1; }
+    .close-btn {
+      position:absolute; top:15px; right:15px;
+      background:red; color:white; border:none; padding:6px 12px;
+      border-radius:6px; cursor:pointer;
+    }
+  </style>
 </head>
 <body>
   <h1>📊 Productivity Dashboard</h1>
-  <p style="text-align:center">
-    <a href="week.html">🎯 Go to Game</a>
-  </p>
+  <p><a href="week.html">🎯 Go to Game</a></p>
 
-  <div id="chart-container">
-    <canvas id="dailyChart"></canvas>
+  <!-- 3 charts in a row -->
+  <div class="grid">
+    <div class="card" data-chart="daily"><h3>Daily Progress</h3><canvas id="dailyChart"></canvas></div>
+    <div class="card" data-chart="weekly"><h3>Weekly Progress</h3><canvas id="weeklyChart"></canvas></div>
+    <div class="card" data-chart="monthly"><h3>Monthly Progress</h3><canvas id="monthlyChart"></canvas></div>
   </div>
-  <div id="chart-container">
-    <canvas id="monthlyChart"></canvas>
+
+  <!-- Modal for zoom -->
+  <div class="modal" id="chartModal">
+    <div class="modal-content">
+      <button class="close-btn" id="closeModal">Close</button>
+      <h2 id="modalTitle"></h2>
+      <canvas id="modalChart"></canvas>
+    </div>
   </div>
 
   <script>
     const studyData = JSON.parse(localStorage.getItem("studyData")) || {};
 
-    // --- DAILY DATA ---
-    const labels = Object.keys(studyData).sort(); // dates sorted
+    // --- DAILY ---
+    const labels = Object.keys(studyData).sort();
     const completed = labels.map(d => studyData[d].totalCompleted || 0);
     const target = labels.map(d => studyData[d].totalTarget || 0);
 
-    const ctx = document.getElementById("dailyChart").getContext("2d");
-    new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: [
-          { 
-            label: "Completed Units", 
-            data: completed, 
-            borderColor: "green", 
-            backgroundColor: "rgba(0,128,0,0.2)", 
-            fill: true,
-            tension: 0.3 
-          },
-          { 
-            label: "Target Units", 
-            data: target, 
-            borderColor: "orange", 
-            backgroundColor: "rgba(255,165,0,0.2)", 
-            fill: true,
-            tension: 0.3 
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          title: { display: true, text: "Daily Progress (Line Graph)" }
-        },
-        scales: {
-          x: { title: { display: true, text: "Date" } },
-          y: { title: { display: true, text: "Units" }, beginAtZero: true }
-        }
-      }
-    });
+    const dailyData = {
+      labels: labels,
+      datasets: [
+        { label:"Completed Units", data:completed, borderColor:"green", backgroundColor:"rgba(0,128,0,0.2)", fill:true, tension:0.3 },
+        { label:"Target Units", data:target, borderColor:"orange", backgroundColor:"rgba(255,165,0,0.2)", fill:true, tension:0.3 }
+      ]
+    };
+    new Chart(document.getElementById("dailyChart"), { type:"line", data:dailyData });
 
-    // --- MONTHLY DATA ---
+    // --- WEEKLY ---
+    function getWeek(dateStr) {
+      const d = new Date(dateStr);
+      const firstDay = new Date(d.getFullYear(), 0, 1);
+      const days = Math.floor((d - firstDay) / (24*60*60*1000));
+      return Math.ceil((days + firstDay.getDay() + 1) / 7);
+    }
+    const weeklyTotals = {};
+    labels.forEach(d => {
+      const week = `${d.slice(0,4)}-W${getWeek(d)}`;
+      if (!weeklyTotals[week]) weeklyTotals[week] = { target:0, completed:0 };
+      weeklyTotals[week].target += studyData[d].totalTarget || 0;
+      weeklyTotals[week].completed += studyData[d].totalCompleted || 0;
+    });
+    const weeks = Object.keys(weeklyTotals).sort();
+    const weeklyData = {
+      labels: weeks,
+      datasets: [
+        { label:"Completed Units", data:weeks.map(w => weeklyTotals[w].completed), borderColor:"blue", backgroundColor:"rgba(0,0,255,0.2)", fill:true, tension:0.3 },
+        { label:"Target Units", data:weeks.map(w => weeklyTotals[w].target), borderColor:"orange", backgroundColor:"rgba(255,165,0,0.2)", fill:true, tension:0.3 }
+      ]
+    };
+    new Chart(document.getElementById("weeklyChart"), { type:"line", data:weeklyData });
+
+    // --- MONTHLY ---
     const monthlyTotals = {};
     labels.forEach(d => {
-      const month = d.slice(0, 7); // YYYY-MM
-      if (!monthlyTotals[month]) monthlyTotals[month] = { target: 0, completed: 0 };
+      const month = d.slice(0,7);
+      if (!monthlyTotals[month]) monthlyTotals[month] = { target:0, completed:0 };
       monthlyTotals[month].target += studyData[d].totalTarget || 0;
       monthlyTotals[month].completed += studyData[d].totalCompleted || 0;
     });
-
     const months = Object.keys(monthlyTotals).sort();
-    const monthlyCompleted = months.map(m => monthlyTotals[m].completed);
-    const monthlyTarget = months.map(m => monthlyTotals[m].target);
+    const monthlyData = {
+      labels: months,
+      datasets: [
+        { label:"Completed Units", data:months.map(m => monthlyTotals[m].completed), borderColor:"green", backgroundColor:"rgba(0,128,0,0.2)", fill:true, tension:0.3 },
+        { label:"Target Units", data:months.map(m => monthlyTotals[m].target), borderColor:"orange", backgroundColor:"rgba(255,165,0,0.2)", fill:true, tension:0.3 }
+      ]
+    };
+    new Chart(document.getElementById("monthlyChart"), { type:"line", data:monthlyData });
 
-    const ctx2 = document.getElementById("monthlyChart").getContext("2d");
-    new Chart(ctx2, {
-      type: "line",
-      data: {
-        labels: months,
-        datasets: [
-          { 
-            label: "Completed Units", 
-            data: monthlyCompleted, 
-            borderColor: "green", 
-            backgroundColor: "rgba(0,128,0,0.2)", 
-            fill: true,
-            tension: 0.3 
-          },
-          { 
-            label: "Target Units", 
-            data: monthlyTarget, 
-            borderColor: "orange", 
-            backgroundColor: "rgba(255,165,0,0.2)", 
-            fill: true,
-            tension: 0.3 
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          title: { display: true, text: "Monthly Progress (Line Graph)" }
-        },
-        scales: {
-          x: { title: { display: true, text: "Month" } },
-          y: { title: { display: true, text: "Units" }, beginAtZero: true }
-        }
-      }
+    // --- MODAL ZOOM ---
+    const modal = document.getElementById("chartModal");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalCanvas = document.getElementById("modalChart");
+    let modalChart = null;
+
+    document.querySelectorAll(".card").forEach(card => {
+      card.addEventListener("click", () => {
+        modal.classList.add("active");
+        let chartConfig;
+        if (card.dataset.chart === "daily") { modalTitle.textContent = "Daily Progress"; chartConfig = dailyData; }
+        if (card.dataset.chart === "weekly") { modalTitle.textContent = "Weekly Progress"; chartConfig = weeklyData; }
+        if (card.dataset.chart === "monthly") { modalTitle.textContent = "Monthly Progress"; chartConfig = monthlyData; }
+        if (modalChart) modalChart.destroy();
+        modalChart = new Chart(modalCanvas, { type:"line", data:chartConfig });
+      });
+    });
+
+    document.getElementById("closeModal").addEventListener("click", () => {
+      modal.classList.remove("active");
     });
   </script>
 </body>
